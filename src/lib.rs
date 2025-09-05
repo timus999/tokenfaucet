@@ -2,21 +2,18 @@
 
 // it consist a mint account which will mint token and the faucet will distribute
 
-
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint,
     entrypoint::ProgramResult,
     msg,
-    pubkey::Pubkey,
     program::invoke_signed,
-}
+    pubkey::Pubkey,
+};
 
 use spl_token::instruction as token_instruction;
 
-
 entrypoint!(process_instruction);
-
 
 fn process_instruction(
     program_id: &Pubkey,
@@ -29,11 +26,17 @@ fn process_instruction(
     let mint_authority_pda = next_account_info(accounts_iter)?;
     let token_program = next_account_info(accounts_iter)?;
 
-
     let amount: u64 = 1_000_000_000;
 
+    // This bump must be passed from client (or derived inside program if included in instruction_data)
+    let (expected_pda, bump) = Pubkey::find_program_address(&[b"faucet"], program_id);
 
-    // mint to user 
+    // sanity check
+    if *mint_authority_pda.key != expected_pda {
+        msg!("Invalid faucet PDA provided");
+        return Err(solana_program::program_error::ProgramError::InvalidSeeds);
+    } // mint to user
+
     let ix = token_instruction::mint_to(
         token_program.key,
         faucet_mint.key,
@@ -43,8 +46,8 @@ fn process_instruction(
         amount,
     )?;
 
-    // PDA seeds for signing 
-    let seeds = &[b"faucet".as_ref(), &[]];
+    // PDA seeds for signing
+    let seeds = &[b"faucet".as_ref(), &[bump]];
 
     invoke_signed(
         &ix,
@@ -55,9 +58,7 @@ fn process_instruction(
             token_program.clone(),
         ],
         &[seeds],
-        
     )?;
-
 
     msg!("minted {} tokens to user!", amount);
     Ok(())
